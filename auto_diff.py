@@ -205,6 +205,8 @@ class MulOp(Op):
     def compute(self, node: Node, input_values: List[np.ndarray]) -> np.ndarray:
         """Return the element-wise multiplication of input values."""
         """TODO: Your code here"""
+        assert len(input_values) == 2
+        return input_values[0] * input_values[1]
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of multiplication node, return partial adjoint to each input."""
@@ -225,6 +227,8 @@ class MulByConstOp(Op):
     def compute(self, node: Node, input_values: List[np.ndarray]) -> np.ndarray:
         """Return the element-wise multiplication of the input value and the constant."""
         """TODO: Your code here"""
+        assert len(input_values) == 1
+        return input_values[0] * node.constant
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of multiplication node, return partial adjoint to the input."""
@@ -244,7 +248,9 @@ class DivOp(Op):
     def compute(self, node: Node, input_values: List[np.ndarray]) -> np.ndarray:
         """Return the element-wise division of input values."""
         """TODO: Your code here"""
-
+        assert len(input_values) == 2
+        return input_values[0] / input_values[1]
+    
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of division node, return partial adjoint to each input."""
         """TODO: Your code here"""
@@ -264,6 +270,8 @@ class DivByConstOp(Op):
     def compute(self, node: Node, input_values: List[np.ndarray]) -> np.ndarray:
         """Return the element-wise division of the input value and the constant."""
         """TODO: Your code here"""
+        assert len(input_values) == 1
+        return input_values[0] / node.constant
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of division node, return partial adjoint to the input."""
@@ -311,6 +319,16 @@ class MatMulOp(Op):
         always 2d numpy.ndarray.
         """
         """TODO: Your code here"""
+        A, B = input_values[0], input_values[1]
+        
+        # 注意检查是否需要转置
+        if node.trans_A:
+            A = A.T
+        if node.trans_B:
+            B = B.T
+        
+        # 执行矩阵乘法
+        return A @ B 
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of matmul node, return partial adjoint to each input.
@@ -404,6 +422,55 @@ class Evaluator:
         """
         """TODO: Your code here"""
 
+        """
+        进来的是输入nodes
+        希望输出一个list,对应所有eval_nodes的计算结果
+        """
+
+        # 创建空的字典
+        # 创建visited list记录
+        # 创建topo_order
+        node_to_value: Dict[Node] = {}
+        node_to_value.update(input_values)
+
+        visited_node = set()
+        topo_order:List[Node] = []
+        # 编写dfs
+        def topo_dfs(node: Node):
+            if node in visited_node:
+                return
+            
+            visited_node.add(node)
+
+            for input_node in node.inputs:
+                topo_dfs(input_node)
+
+            topo_order.append(node)
+            return 0
+
+        # 使用dfs获取拓扑顺序
+        for node in self.eval_nodes:
+            topo_dfs(node)
+        
+        # use topo order to compute values for nodes
+        for node in topo_order:
+            if node in node_to_value:
+                continue
+
+            # extract input nodes
+            input_nodes = node.inputs
+            input_node_values = [node_to_value[input_node] for input_node in input_nodes]
+
+            # use input to comptute & store values in node_to_value
+            node_to_value.update({node:node.op.compute(node,input_node_values)}) 
+        
+        # extract eval_nodes's value, and return them as List
+        eval_values = []
+        for eval_node in self.eval_nodes:
+            eval_values.append(node_to_value[eval_node])
+
+        return eval_values
+        
 
 def gradients(output_node: Node, nodes: List[Node]) -> List[Node]:
     """Construct the backward computational graph, which takes gradient
